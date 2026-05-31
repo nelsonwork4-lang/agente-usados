@@ -1,0 +1,298 @@
+# ============================================================
+# scraper.py — Coleta anúncios do Facebook Marketplace
+# Busca por múltiplas categorias de produtos usados
+# ============================================================
+
+import re
+import json
+import time
+import random
+import os
+from datetime import datetime
+from playwright.sync_api import sync_playwright
+from config import (
+    FACEBOOK_EMAIL, FACEBOOK_SENHA,
+    CATEGORIAS, PROIBIDOS_GLOBAL,
+    PRECO_MINIMO, PRECO_MAXIMO, DIAS_ANUNCIADO,
+)
+
+ARQUIVO_COOKIES = "cookies_fb.json"
+ARQUIVO_SESSAO  = "sessao_facebook.json"
+TIMEOUT         = 30000
+
+
+def pausa(a=1.0, b=2.5):
+    time.sleep(random.uniform(a, b))
+
+
+def extrair_preco(txt):
+    m = re.search(r'R\$\s*([\d\.]+)', txt)
+    if m:
+        try:
+            return int(m.group(1).replace(".", ""))
+        except Exception:
+            return 0
+    return 0
+
+
+def is_proibido(texto):
+    txt = texto.lower()
+    for p in PROIBIDOS_GLOBAL:
+        if p.lower() in txt:
+            return True
+    return False
+
+
+def categoria_match(texto, categoria):
+    txt = texto.lower()
+    for p in categoria.get("proibidos", []):
+        if p.lower() in txt:
+            return False
+    for kw in categoria["keywords"]:
+        if kw.lower() in txt:
+            return True
+    return False
+
+
+def _carregar_lista_cookies():
+    for arq in [ARQUIVO_COOKIES, ARQUIVO_SESSAO]:
+        if os.path.exists(arq):
+            with open(arq) as f:
+                data = json.load(f)
+            lista = data.get("cookies", data) if isinstance(data, dict) else data
+            if isinstance(lista, list) and lista:
+                return lista
+    return []
+
+
+def fazer_login_e_salvar_cookies():
+    print("🔐 Fazendo login no Facebook...")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=[
+            "--no-sandbox","--disable-dev-shm-usage","--disable-gpu","--single-process"])
+        ctx = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width":1280,"height":900}, locale="pt-BR")
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
+        try:
+            page.goto("https://www.facebook.com", wait_until="domcontentloaded", timeout=TIMEOUT)
+            pausa(2,3)
+            if page.locator('input[name="email"]').count():
+                page.fill('input[name="email"]', FACEBOOK_EMAIL)
+                pausa(0.5,1)
+                page.fill('input[name="pass"]', FACEBOOK_SENHA)
+                pausa(0.5,1)
+                page.keyboard.press("Enter")
+                pausa(4,6)
+            cookies = ctx.cookies()
+            with open(ARQUIVO_COOKIES, "w") as f:
+                json.dump(cookies, f, indent=2)
+            print(f"✅ {len(cookies)} cookies salvos")
+            return cookies
+        except Exception as e:
+            print(f"❌ Login falhou: {e}")
+            return []
+        finally:
+            browser.close()
+
+
+def _extrair_cards(page):
+    """Extrai cards da página atual do Marketplace."""
+    return page.evaluate(r"""() => {
+        const cards = document.querySelectorAll('a[href*="/marketplace/item/"]');
+        const vistos = new Set();
+        const result = [];
+        for (const a of cards) {
+            const m = (a.href||'').match(/\/marketplace\/item\/(\d+)\//);
+            if (!m) continue;
+            const id = m[1];
+            if (vistos.has(id)) continue;
+            vistos.add(id);
+            let node = a;
+            for (let j=0; j<8; j++) {
+                if (!node.parentElement) break;
+                node = node.parentElement;
+                const txt = node.innerText||'';
+                if (txt.includes('R$') && txt.length > 10 && txt.length < 400) {
+                    result.push({id, txt: txt.substring(0,250)});
+                    break;
+                }
+            }
+            if (!result.find(r=>r.id===id))
+                result.push({id, txt:(a.innerText||'').substring(0,250)});
+        }
+        return result;
+    }""")
+
+
+def buscar_categoria(page, categoria):
+    """Busca anúncios de uma categoria específica."""
+    url = categoria["url"]
+    nome_cat = categoria["nome"]
+    encontrados = {}
+
+    try:
+        print(f"  📂 {nome_cat}: {url[:80]}...")
+        page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT)
+        pausa(4, 6)
+
+        if "login" in page.url.lower():
+            print("  ❌ Sessão expirada")
+            return {}
+
+        # Scroll para carregar mais
+        ultimo = 0
+        sem_novo = 0
+        for i in range(40):
+            if i % 3 == 0:
+                page.evaluate("window.scrollBy({top:1500,behavior:'smooth'})")
+            else:
+                page.mouse.wheel(0, random.randint(800, 2000))
+            pausa(0.7, 1.3)
+            n = page.locator('a[href*="/marketplace/item/"]').count()
+            if i % 10 == 9:
+                print(f"    Scroll {i+1}: {n} cards")
+            if n > ultimo:
+                ultimo = n
+                sem_novo = 0
+            else:
+                sem_novo += 1
+                if sem_novo >= 8:
+                    break
+
+        cards = _extrair_cards(page)
+        for item in cards:
+            id_fb = item["id"]
+            txt   = item["txt"]
+            preco = extrair_preco(txt)
+
+            if not preco or preco < PRECO_MINIMO or preco > PRECO_MAXIMO:
+                continue
+            if is_proibido(txt):
+                continue
+            if not categoria_match(txt, categoria):
+                continue
+
+            # Título: primeira linha substancial
+            linhas = [l.strip() for l in txt.split("\n") if l.strip() and "R$" not in l]
+            titulo = linhas[0][:120] if linhas else txt[:80]
+
+            encontrados[id_fb] = {
+                "id_facebook":    id_fb,
+                "link":           f"https://www.facebook.com/marketplace/item/{id_fb}/",
+                "titulo":         titulo,
+                "preco":          preco,
+                "categoria":      nome_cat,
+                "texto_completo": txt,
+                "fotos":          [],
+                "descricao":      "",
+                "data_coleta":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+        print(f"    ✅ {len(encontrados)} anúncios válidos em {nome_cat}")
+
+    except Exception as e:
+        print(f"  ❌ Erro em {nome_cat}: {e}")
+
+    return encontrados
+
+
+def coletar_detalhes(anuncios, page):
+    """Abre cada PDP para pegar descrição e fotos."""
+    print(f"\n🔍 Coletando detalhes de {len(anuncios)} anúncios...")
+    for i, an in enumerate(anuncios):
+        try:
+            print(f"  [{i+1}/{len(anuncios)}] {an['titulo'][:50]}")
+            page.goto(an["link"], wait_until="domcontentloaded", timeout=TIMEOUT)
+            pausa(1.5, 2.5)
+
+            # Descrição
+            for sel in ['[data-testid="marketplace-pdp-seller-description"]',
+                        '[class*="description"]']:
+                el = page.locator(sel).first
+                try:
+                    txt = el.inner_text(timeout=3000)
+                    if len(txt) > 30:
+                        an["descricao"] = txt[:1500]
+                        break
+                except Exception:
+                    pass
+
+            # Fotos
+            try:
+                fotos = page.evaluate("""() => {
+                    const urls = new Set();
+                    document.querySelectorAll('img').forEach(img => {
+                        const src = img.src||'';
+                        if (!src.includes('fbcdn')) return;
+                        if (src.includes('_s.')||src.includes('_t.')||src.includes('emoji')) return;
+                        if ((img.naturalWidth||img.width||0) >= 200) urls.add(src);
+                    });
+                    return [...urls].slice(0,5);
+                }""")
+                if fotos:
+                    an["fotos"] = fotos
+                    print(f"    📸 {len(fotos)} fotos")
+            except Exception:
+                pass
+
+        except Exception as e:
+            print(f"    ⚠️  {e}")
+        pausa(0.8, 1.5)
+    return anuncios
+
+
+def coletar():
+    print("\n" + "="*50)
+    print(f"🛍️  Iniciando coleta — {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    print("="*50)
+
+    cookies_list = _carregar_lista_cookies()
+    if not cookies_list:
+        print("🔐 Sem cookies — fazendo login...")
+        fazer_login_e_salvar_cookies()
+        cookies_list = _carregar_lista_cookies()
+        if not cookies_list:
+            print("❌ Sem cookies. Encerrando.")
+            return []
+
+    todos = {}
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=[
+            "--no-sandbox","--disable-dev-shm-usage","--disable-gpu",
+            "--single-process","--disable-blink-features=AutomationControlled"])
+        ctx = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width":1280,"height":900},
+            locale="pt-BR", timezone_id="America/Sao_Paulo",
+            extra_http_headers={"Accept-Language":"pt-BR,pt;q=0.9"})
+        ctx.add_cookies(cookies_list)
+        page = ctx.new_page()
+        page.add_init_script("""
+            Object.defineProperty(navigator,'webdriver',{get:()=>undefined});
+            Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3,4,5]});
+            Object.defineProperty(navigator,'languages',{get:()=>['pt-BR','pt']});
+            window.chrome={runtime:{}};
+        """)
+
+        # Buscar por categoria
+        for cat in CATEGORIAS:
+            novos = buscar_categoria(page, cat)
+            antes = len(todos)
+            todos.update(novos)
+            print(f"  +{len(todos)-antes} novos (total acumulado: {len(todos)})")
+            pausa(2, 4)
+
+        # Coletar detalhes dos melhores
+        lista = list(todos.values())
+        print(f"\n📦 {len(lista)} anúncios únicos coletados")
+
+        if lista:
+            lista = coletar_detalhes(lista, page)
+
+        browser.close()
+
+    print(f"\n✅ Coleta finalizada: {len(lista)} anúncios")
+    return lista
