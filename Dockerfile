@@ -10,5 +10,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium --with-deps
+# cache-bust: 20260531053546
 COPY . .
 CMD ["python", "agendador.py"]
