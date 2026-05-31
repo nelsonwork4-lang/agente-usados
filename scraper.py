@@ -311,6 +311,7 @@ def coletar():
         """)
 
         # Aquecer sessão: navegar ao FB e fazer login se necessário
+        # Verificar sessão — se inválida, fazer login direto
         try:
             print("🔥 Verificando sessão FB...")
             page.goto("https://www.facebook.com/marketplace/curitiba/",
@@ -320,64 +321,40 @@ def coletar():
             print(f"  URL: {url_home[:80]}")
 
             if "login" in url_home or "checkpoint" in url_home:
-                print("⚠️  Cookies inválidos neste IP — fazendo login com email/senha...")
-                # Login direto na página atual
-                try:
-                    # Tentar login via URL direta com credenciais
-                    page.goto("https://www.facebook.com/login/", wait_until="domcontentloaded", timeout=TIMEOUT)
-                    pausa(3, 5)
-                    
-                    # Tentar múltiplos seletores de email
-                    email_sel = None
-                    for sel in ['input[name="email"]', '#email', 'input[type="email"]', 'input[id*="email"]']:
-                        if page.locator(sel).count() > 0:
-                            email_sel = sel
-                            break
-                    
-                    if not email_sel:
-                        # Tirar screenshot para debug e tentar via JavaScript
-                        print("⚠️  Formulário padrão não encontrado — tentando via JS...")
-                        page.evaluate(f"""
-                            document.querySelector('[name="email"], #email, [type="email"]').value = '{FACEBOOK_EMAIL}';
-                        """)
-                        pausa(1, 2)
-                        page.evaluate(f"""
-                            document.querySelector('[name="pass"], #pass, [type="password"]').value = '{FACEBOOK_SENHA}';
-                        """)
-                        pausa(0.5, 1)
-                        page.keyboard.press('Enter')
-                    else:
+                print("⚠️  Sessão inválida — fazendo login com email/senha...")
+                # Usar a função de login já existente no módulo
+                page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=TIMEOUT)
+                pausa(2, 3)
+                logou = False
+                for email_sel in ['input[name="email"]', '#email', 'input[type="email"]']:
+                    if page.locator(email_sel).count() > 0:
                         page.fill(email_sel, FACEBOOK_EMAIL)
                         pausa(0.5, 1)
-                        for psel in ['input[name="pass"]', '#pass', 'input[type="password"]']:
-                            if page.locator(psel).count() > 0:
-                                page.fill(psel, FACEBOOK_SENHA)
+                        for pass_sel in ['input[name="pass"]', '#pass', 'input[type="password"]']:
+                            if page.locator(pass_sel).count() > 0:
+                                page.fill(pass_sel, FACEBOOK_SENHA)
+                                pausa(0.5, 1)
+                                page.keyboard.press("Enter")
+                                pausa(7, 10)
+                                logou = True
                                 break
-                        pausa(0.5, 1)
-                        page.keyboard.press("Enter")
-                    
-                    pausa(6, 10)
-                    url_pos = page.url.lower()
-                    print(f"  URL pós-login: {url_pos[:80]}")
-                    
-                    if "login" in url_pos or "checkpoint" in url_pos:
-                        print("❌ Login falhou — FB pode estar pedindo verificação")
-                        # Continuar sem login — tentar as categorias mesmo assim
-                        # às vezes o marketplace carrega sem login completo
-                    else:
-                        print("✅ Login realizado!")
-                        novos_cookies = ctx.cookies()
-                        with open(ARQUIVO_COOKIES, "w") as f:
-                            json.dump(novos_cookies, f, indent=2)
-                        print(f"  💾 {len(novos_cookies)} cookies salvos")
-                except Exception as e:
-                    print(f"⚠️  Erro no login: {e} — continuando sem login")
+                        break
+                url_pos = page.url.lower()
+                print(f"  URL pós-login: {url_pos[:80]}")
+                if "login" in url_pos or not logou:
+                    print("❌ Login falhou — encerrando")
+                    browser.close()
+                    return []
+                print("✅ Login realizado!")
+                novos = ctx.cookies()
+                with open(ARQUIVO_COOKIES, "w") as f:
+                    json.dump(novos, f, indent=2)
+                print(f"  💾 {len(novos)} cookies salvos")
             else:
                 print("✅ Sessão válida!")
         except Exception as e:
             print(f"⚠️  Erro ao verificar sessão: {e}")
 
-        # Buscar por categoria
         for cat in CATEGORIAS:
             novos = buscar_categoria(page, cat)
             antes = len(todos)
