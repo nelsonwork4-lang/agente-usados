@@ -56,36 +56,36 @@ def categoria_match(texto, categoria):
 
 def _carregar_lista_cookies():
     """
-    Tenta carregar cookies em 3 etapas:
-    1. Variável de ambiente FB_COOKIES_JSON (Railway)
-    2. cookies_fb.json no disco
-    3. sessao_facebook.json no disco
+    Prioridade:
+    1. cookies_fb.json no disco (gerado pelo pre-deploy no IP do Railway)
+    2. sessao_facebook.json no disco
+    3. Variável FB_COOKIES_JSON (fallback — IP pode ser diferente)
     """
-    # 1. Variável de ambiente (método preferido no Railway)
-    env_cookies = os.environ.get("FB_COOKIES_JSON", "")
-    if env_cookies:
-        try:
-            data = json.loads(env_cookies)
-            lista = data.get("cookies", data) if isinstance(data, dict) else data
-            if isinstance(lista, list) and lista:
-                tem_xs = any(c.get("name") == "xs" for c in lista if isinstance(c, dict))
-                print(f"🍪 Cookies da env FB_COOKIES_JSON ({len(lista)} cookies, xs={'presente' if tem_xs else 'ausente'})")
-                return lista
-        except Exception as e:
-            print(f"⚠️  Erro ao ler FB_COOKIES_JSON: {e}")
-
-    # 2. Arquivos no disco
+    # 1. Arquivos no disco — gerados pelo pre_deploy_login.py no mesmo IP
     for arq in [ARQUIVO_COOKIES, ARQUIVO_SESSAO]:
         if os.path.exists(arq):
             try:
                 with open(arq) as f:
                     data = json.load(f)
                 lista = data.get("cookies", data) if isinstance(data, dict) else data
-                if isinstance(lista, list) and lista:
-                    print(f"🍪 Cookies de {arq} ({len(lista)} cookies)")
+                if isinstance(lista, list) and len(lista) >= 3:
+                    tem_xs = any(c.get("name") == "xs" for c in lista if isinstance(c, dict))
+                    print(f"🍪 Cookies de {arq} ({len(lista)} cookies, xs={'presente' if tem_xs else 'ausente'})")
                     return lista
             except Exception as e:
                 print(f"⚠️  Erro ao ler {arq}: {e}")
+
+    # 2. Variável de ambiente (fallback)
+    env_cookies = os.environ.get("FB_COOKIES_JSON", "")
+    if env_cookies:
+        try:
+            data = json.loads(env_cookies)
+            lista = data.get("cookies", data) if isinstance(data, dict) else data
+            if isinstance(lista, list) and lista:
+                print(f"🍪 Cookies da env FB_COOKIES_JSON ({len(lista)} cookies) [fallback]")
+                return lista
+        except Exception as e:
+            print(f"⚠️  Erro ao ler FB_COOKIES_JSON: {e}")
     return []
 
 
