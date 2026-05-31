@@ -159,11 +159,19 @@ def buscar_categoria(page, categoria):
     try:
         print(f"  📂 {nome_cat}: {url[:80]}...")
         page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT)
-        pausa(4, 6)
+        pausa(5, 8)  # pausa maior — FB pode redirecionar e voltar
 
-        if "login" in page.url.lower():
-            print("  ❌ Sessão expirada")
-            return {}
+        url_atual = page.url.lower()
+        print(f"    URL atual: {url_atual[:80]}")
+
+        # Verificar login de forma mais robusta
+        if "login" in url_atual or "checkpoint" in url_atual:
+            # Tentar aguardar mais — às vezes FB redireciona e volta
+            pausa(3, 5)
+            url_atual = page.url.lower()
+            if "login" in url_atual or "checkpoint" in url_atual:
+                print("  ❌ Sessão expirada — redirecionado para login")
+                return {}
 
         # Scroll para carregar mais
         ultimo = 0
@@ -299,7 +307,29 @@ def coletar():
             Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3,4,5]});
             Object.defineProperty(navigator,'languages',{get:()=>['pt-BR','pt']});
             window.chrome={runtime:{}};
+            Object.defineProperty(navigator,'platform',{get:()=>'Win32'});
         """)
+
+        # Aquecer sessão: navegar ao FB primeiro para validar cookies
+        try:
+            print("🔥 Aquecendo sessão FB...")
+            page.goto("https://www.facebook.com/marketplace/curitiba/",
+                      wait_until="domcontentloaded", timeout=TIMEOUT)
+            pausa(4, 6)
+            url_home = page.url.lower()
+            print(f"  URL home: {url_home[:60]}")
+            if "login" in url_home:
+                print("❌ Cookies inválidos — fazendo login...")
+                fazer_login_e_salvar_cookies()
+                cookies_list = _carregar_lista_cookies()
+                if cookies_list:
+                    ctx.add_cookies(cookies_list)
+                else:
+                    print("❌ Login falhou. Encerrando.")
+                    browser.close()
+                    return []
+        except Exception as e:
+            print(f"⚠️  Erro ao aquecer sessão: {e}")
 
         # Buscar por categoria
         for cat in CATEGORIAS:
