@@ -55,13 +55,37 @@ def categoria_match(texto, categoria):
 
 
 def _carregar_lista_cookies():
-    for arq in [ARQUIVO_COOKIES, ARQUIVO_SESSAO]:
-        if os.path.exists(arq):
-            with open(arq) as f:
-                data = json.load(f)
+    """
+    Tenta carregar cookies em 3 etapas:
+    1. Variável de ambiente FB_COOKIES_JSON (Railway)
+    2. cookies_fb.json no disco
+    3. sessao_facebook.json no disco
+    """
+    # 1. Variável de ambiente (método preferido no Railway)
+    env_cookies = os.environ.get("FB_COOKIES_JSON", "")
+    if env_cookies:
+        try:
+            data = json.loads(env_cookies)
             lista = data.get("cookies", data) if isinstance(data, dict) else data
             if isinstance(lista, list) and lista:
+                tem_xs = any(c.get("name") == "xs" for c in lista if isinstance(c, dict))
+                print(f"🍪 Cookies da env FB_COOKIES_JSON ({len(lista)} cookies, xs={'presente' if tem_xs else 'ausente'})")
                 return lista
+        except Exception as e:
+            print(f"⚠️  Erro ao ler FB_COOKIES_JSON: {e}")
+
+    # 2. Arquivos no disco
+    for arq in [ARQUIVO_COOKIES, ARQUIVO_SESSAO]:
+        if os.path.exists(arq):
+            try:
+                with open(arq) as f:
+                    data = json.load(f)
+                lista = data.get("cookies", data) if isinstance(data, dict) else data
+                if isinstance(lista, list) and lista:
+                    print(f"🍪 Cookies de {arq} ({len(lista)} cookies)")
+                    return lista
+            except Exception as e:
+                print(f"⚠️  Erro ao ler {arq}: {e}")
     return []
 
 
