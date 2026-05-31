@@ -159,8 +159,8 @@ Responda SOMENTE com JSON válido:
 
     try:
         modelo  = "claude-sonnet-4-6" if fotos_carregadas > 0 else "claude-haiku-4-5-20251001"
-        max_tok = 1000 if fotos_carregadas > 0 else 700
-        print(f"  🤖 IA ({modelo.split('-')[1]}) | {fotos_carregadas} foto(s) | ref: R${preco_ref:,.0f} | desconto: {desconto or '?'}%")
+        max_tok = 1500 if fotos_carregadas > 0 else 900
+        print(f"  🤖 IA | {fotos_carregadas} foto(s) | ref: R${preco_ref:,.0f} | desconto: {desconto or '?'}%")
 
         msg = cliente.messages.create(
             model=modelo, max_tokens=max_tok,
@@ -168,7 +168,20 @@ Responda SOMENTE com JSON válido:
 
         txt = msg.content[0].text.strip()
         txt = re.sub(r'```json|```', '', txt).strip()
-        resultado = json.loads(txt)
+
+        # Parser robusto — repara JSON truncado
+        try:
+            resultado = json.loads(txt)
+        except json.JSONDecodeError:
+            # Tentar extrair objeto JSON completo
+            m = re.search(r'\{.*\}', txt, re.DOTALL)
+            if m:
+                try:
+                    resultado = json.loads(m.group(0))
+                except Exception:
+                    raise
+            else:
+                raise
 
         # Enriquecer resultado
         resultado["titulo"]      = titulo
