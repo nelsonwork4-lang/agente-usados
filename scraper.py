@@ -323,31 +323,55 @@ def coletar():
                 print("⚠️  Cookies inválidos neste IP — fazendo login com email/senha...")
                 # Login direto na página atual
                 try:
-                    page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=TIMEOUT)
-                    pausa(2, 3)
-                    page.wait_for_selector('input[name="email"]', timeout=10000)
-                    page.fill('input[name="email"]', FACEBOOK_EMAIL)
-                    pausa(0.5, 1)
-                    page.fill('input[name="pass"]', FACEBOOK_SENHA)
-                    pausa(0.5, 1)
-                    page.keyboard.press("Enter")
-                    pausa(5, 8)
+                    # Tentar login via URL direta com credenciais
+                    page.goto("https://www.facebook.com/login/", wait_until="domcontentloaded", timeout=TIMEOUT)
+                    pausa(3, 5)
+                    
+                    # Tentar múltiplos seletores de email
+                    email_sel = None
+                    for sel in ['input[name="email"]', '#email', 'input[type="email"]', 'input[id*="email"]']:
+                        if page.locator(sel).count() > 0:
+                            email_sel = sel
+                            break
+                    
+                    if not email_sel:
+                        # Tirar screenshot para debug e tentar via JavaScript
+                        print("⚠️  Formulário padrão não encontrado — tentando via JS...")
+                        page.evaluate(f"""
+                            document.querySelector('[name="email"], #email, [type="email"]').value = '{FACEBOOK_EMAIL}';
+                        """)
+                        pausa(1, 2)
+                        page.evaluate(f"""
+                            document.querySelector('[name="pass"], #pass, [type="password"]').value = '{FACEBOOK_SENHA}';
+                        """)
+                        pausa(0.5, 1)
+                        page.evaluate("document.querySelector('[type="submit"], button[name="login"]').click()")
+                    else:
+                        page.fill(email_sel, FACEBOOK_EMAIL)
+                        pausa(0.5, 1)
+                        for psel in ['input[name="pass"]', '#pass', 'input[type="password"]']:
+                            if page.locator(psel).count() > 0:
+                                page.fill(psel, FACEBOOK_SENHA)
+                                break
+                        pausa(0.5, 1)
+                        page.keyboard.press("Enter")
+                    
+                    pausa(6, 10)
                     url_pos = page.url.lower()
                     print(f"  URL pós-login: {url_pos[:80]}")
-                    if "login" in url_pos:
-                        print("❌ Login falhou — verificar credenciais")
-                        browser.close()
-                        return []
-                    print("✅ Login realizado com sucesso!")
-                    # Salvar novos cookies
-                    novos_cookies = ctx.cookies()
-                    with open(ARQUIVO_COOKIES, "w") as f:
-                        json.dump(novos_cookies, f, indent=2)
-                    print(f"  💾 {len(novos_cookies)} cookies salvos")
+                    
+                    if "login" in url_pos or "checkpoint" in url_pos:
+                        print("❌ Login falhou — FB pode estar pedindo verificação")
+                        # Continuar sem login — tentar as categorias mesmo assim
+                        # às vezes o marketplace carrega sem login completo
+                    else:
+                        print("✅ Login realizado!")
+                        novos_cookies = ctx.cookies()
+                        with open(ARQUIVO_COOKIES, "w") as f:
+                            json.dump(novos_cookies, f, indent=2)
+                        print(f"  💾 {len(novos_cookies)} cookies salvos")
                 except Exception as e:
-                    print(f"❌ Erro no login: {e}")
-                    browser.close()
-                    return []
+                    print(f"⚠️  Erro no login: {e} — continuando sem login")
             else:
                 print("✅ Sessão válida!")
         except Exception as e:
