@@ -345,7 +345,7 @@ def coletar():
                             document.querySelector('[name="pass"], #pass, [type="password"]').value = '{FACEBOOK_SENHA}';
                         """)
                         pausa(0.5, 1)
-                        page.evaluate("document.querySelector('[type="submit"], button[name="login"]').click()")
+                        page.keyboard.press('Enter')
                     else:
                         page.fill(email_sel, FACEBOOK_EMAIL)
                         pausa(0.5, 1)
