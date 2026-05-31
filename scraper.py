@@ -310,26 +310,48 @@ def coletar():
             Object.defineProperty(navigator,'platform',{get:()=>'Win32'});
         """)
 
-        # Aquecer sessão: navegar ao FB primeiro para validar cookies
+        # Aquecer sessão: navegar ao FB e fazer login se necessário
         try:
-            print("🔥 Aquecendo sessão FB...")
+            print("🔥 Verificando sessão FB...")
             page.goto("https://www.facebook.com/marketplace/curitiba/",
                       wait_until="domcontentloaded", timeout=TIMEOUT)
-            pausa(4, 6)
+            pausa(5, 7)
             url_home = page.url.lower()
-            print(f"  URL home: {url_home[:60]}")
-            if "login" in url_home:
-                print("❌ Cookies inválidos — fazendo login...")
-                fazer_login_e_salvar_cookies()
-                cookies_list = _carregar_lista_cookies()
-                if cookies_list:
-                    ctx.add_cookies(cookies_list)
-                else:
-                    print("❌ Login falhou. Encerrando.")
+            print(f"  URL: {url_home[:80]}")
+
+            if "login" in url_home or "checkpoint" in url_home:
+                print("⚠️  Cookies inválidos neste IP — fazendo login com email/senha...")
+                # Login direto na página atual
+                try:
+                    page.goto("https://www.facebook.com/", wait_until="domcontentloaded", timeout=TIMEOUT)
+                    pausa(2, 3)
+                    page.wait_for_selector('input[name="email"]', timeout=10000)
+                    page.fill('input[name="email"]', FACEBOOK_EMAIL)
+                    pausa(0.5, 1)
+                    page.fill('input[name="pass"]', FACEBOOK_SENHA)
+                    pausa(0.5, 1)
+                    page.keyboard.press("Enter")
+                    pausa(5, 8)
+                    url_pos = page.url.lower()
+                    print(f"  URL pós-login: {url_pos[:80]}")
+                    if "login" in url_pos:
+                        print("❌ Login falhou — verificar credenciais")
+                        browser.close()
+                        return []
+                    print("✅ Login realizado com sucesso!")
+                    # Salvar novos cookies
+                    novos_cookies = ctx.cookies()
+                    with open(ARQUIVO_COOKIES, "w") as f:
+                        json.dump(novos_cookies, f, indent=2)
+                    print(f"  💾 {len(novos_cookies)} cookies salvos")
+                except Exception as e:
+                    print(f"❌ Erro no login: {e}")
                     browser.close()
                     return []
+            else:
+                print("✅ Sessão válida!")
         except Exception as e:
-            print(f"⚠️  Erro ao aquecer sessão: {e}")
+            print(f"⚠️  Erro ao verificar sessão: {e}")
 
         # Buscar por categoria
         for cat in CATEGORIAS:
