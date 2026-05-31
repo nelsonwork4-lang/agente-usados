@@ -1,6 +1,7 @@
 # ============================================================
 # scraper.py — Coleta anúncios do Facebook Marketplace
 # Busca por múltiplas categorias de produtos usados
+# v4 — login limpo sem JS, prioridade cookies disco
 # ============================================================
 
 import re
