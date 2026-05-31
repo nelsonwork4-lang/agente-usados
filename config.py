@@ -23,8 +23,8 @@ DIAS_ANUNCIADO       = 3     # só anúncios dos últimos X dias
 CATEGORIAS = [
     {
         "nome": "Eletrodomésticos",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=eletrodomestico&exact=false&daysSinceListed=3&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/home-appliances"
+                "?daysSinceListed=3&sortBy=creation_time_descend",
         "keywords": [
             "geladeira", "refrigerador", "fogão", "forno", "microondas",
             "máquina de lavar", "lavadora", "secadora", "lava louça",
@@ -37,8 +37,8 @@ CATEGORIAS = [
     },
     {
         "nome": "Ferramentas e Jardim",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=ferramenta+usada&exact=false&daysSinceListed=3&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/tools"
+                "?daysSinceListed=3&sortBy=creation_time_descend",
         "keywords": [
             "motosserra", "moto serra", "roçadeira", "roçadeira",
             "furadeira", "parafusadeira", "esmerilhadeira", "lixadeira",
@@ -50,8 +50,8 @@ CATEGORIAS = [
     },
     {
         "nome": "Som e Áudio",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=som+automotivo+amplificador&exact=false&daysSinceListed=3&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/electronics"
+                "?daysSinceListed=3&sortBy=creation_time_descend",
         "keywords": [
             "amplificador", "caixa de som", "subwoofer", "falante",
             "receiver", "home theater", "soundbar", "módulo",
@@ -62,8 +62,8 @@ CATEGORIAS = [
     },
     {
         "nome": "Prata e Joias",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=prata+925&exact=false&daysSinceListed=7&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/jewelry-accessories"
+                "?daysSinceListed=7&sortBy=creation_time_descend",
         "keywords": [
             "prata 925", "prata sterling", "prata maciça",
             "corrente prata", "anel prata", "pulseira prata",
@@ -74,8 +74,8 @@ CATEGORIAS = [
     },
     {
         "nome": "Móveis e Decoração",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=sofa+mesa+guarda+roupa&exact=false&daysSinceListed=3&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/furniture"
+                "?daysSinceListed=3&sortBy=creation_time_descend",
         "keywords": [
             "sofá", "sofa", "guarda roupa", "roupeiro", "cama",
             "colchão", "mesa jantar", "mesa escritório", "cadeira",
@@ -85,8 +85,8 @@ CATEGORIAS = [
     },
     {
         "nome": "Bicicletas e Esporte",
-        "url":  "https://www.facebook.com/marketplace/curitiba/search?"
-                "query=bicicleta+musculacao&exact=false&daysSinceListed=3&sortBy=creation_time_descend",
+        "url":  "https://www.facebook.com/marketplace/curitiba/sporting-goods"
+                "?daysSinceListed=3&sortBy=creation_time_descend",
         "keywords": [
             "bicicleta", "bike", "mtb", "speed", "elétrica",
             "musculação", "esteira", "bicicleta ergométrica",
